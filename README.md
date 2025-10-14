@@ -38,23 +38,7 @@ El bot detecta salarios en múltiples formatos:
 - Rangos con símbolos: `$50,000 - $80,000`
 - Formato abreviado: `50k-80k` o `$50k-$80k`
 - Salarios por hora: `$25-$35/hr` (se convierte a anual)
-- Múltiples monedas: `# Sistema de Búsqueda de Empleos Remotos para Discord
-
-Bot automatizado de Discord para búsqueda de trabajos remotos en LinkedIn y otras plataformas de empleo, con actualizaciones programadas diarias.
-
-## Características Principales
-
-- **Búsqueda Instantánea**: Comando `/trabajo` para obtener los 10 mejores trabajos remotos al instante
-- **Información Detallada**: Cada trabajo muestra empresa, ubicación, salario, tipo de trabajo, nivel de experiencia y más
-- **Extracción Automática de Salarios**: Sistema avanzado con expresiones regulares que detecta salarios en múltiples formatos
-- **Ordenamiento Inteligente**: Los trabajos se ordenan automáticamente por salario (los mejor pagados primero)
-- **Navegación Interactiva**: Sistema de paginación con botones para explorar trabajos uno por uno
-- **Actualizaciones Automáticas**: Comando `/trabajo-programar` para recibir publicaciones diarias programadas
-- **Múltiples Fuentes**: Integración con LinkedIn y APIs alternativas de empleos
-- **Gestión de Programaciones**: Visualiza y administra todas las búsquedas programadas activas
-
-, `€`, `£`
-
+- Múltiples monedas: `$`, `€`, `£`
 - Contexto explícito: `Salary: 50,000-80,000`
 
 **Ordenamiento por Salario:**
@@ -300,20 +284,26 @@ chmod 644 bot_empleos.log
 
 ## Opciones de Despliegue
 
-Para operación 24/7, hospeda el bot en:
+Para operación 24/7, el bot puede desplegarse en múltiples entornos:
+
+**Containerización (Recomendado):**
+
+- **Docker**: Containerización portable y reproducible (ver sección [Despliegue con Docker](#despliegue-con-docker))
+- **Kubernetes**: Orquestación de contenedores para producción (ver sección [Despliegue en Kubernetes](#despliegue-en-kubernetes))
 
 **Servicios en la Nube:**
 
 - **Railway**: Nivel gratuito disponible, fácil despliegue
 - **Heroku**: Nivel gratuito (con limitaciones)
-- **DigitalOcean**: VPS desde $5/mes
-- **AWS EC2**: Nivel gratuito por 12 meses
-- **Google Cloud Platform**: Créditos gratuitos para nuevos usuarios
+- **DigitalOcean**: VPS desde $5/mes, compatible con Docker
+- **AWS EC2**: Nivel gratuito por 12 meses, soporte completo para Kubernetes (EKS)
+- **Google Cloud Platform**: Créditos gratuitos para nuevos usuarios, Google Kubernetes Engine (GKE)
 
 **Servidores Locales:**
 
-- Raspberry Pi con conexión estable
+- Raspberry Pi con conexión estable (soporta Docker)
 - Servidor personal con uptime garantizado
+- Cluster Kubernetes local con minikube o k3s
 
 ### Ejemplo de Despliegue en Railway
 
@@ -322,18 +312,218 @@ Para operación 24/7, hospeda el bot en:
 3. Agrega las variables de entorno en la configuración
 4. Railway detectará automáticamente el proyecto Python y lo desplegará
 
+## Despliegue con Docker
+
+El proyecto incluye un `Dockerfile` optimizado para la containerización de la aplicación.
+
+### Características del Dockerfile
+
+- **Multi-stage build**: Reduce el tamaño final de la imagen
+- **Plataforma específica**: `linux/amd64` para compatibilidad con sistemas cloud
+- **Imagen base**: Python 3.10 slim en Debian Bookworm
+- **Optimización de caché**: Utiliza cache mounts para instalación de dependencias
+- **Sin cache innecesario**: Flag `--no-cache-dir` para reducir tamaño
+
+### Construir la Imagen
+
+```bash
+# Construir imagen local
+docker build -t job-search-bot:latest .
+
+# Construir para plataforma específica
+docker build --platform linux/amd64 -t job-search-bot:latest .
+```
+
+### Ejecutar el Contenedor
+
+```bash
+# Ejecutar con variables de entorno desde archivo
+docker run -d \
+  --name job-search-bot \
+  --env-file .env \
+  job-search-bot:latest
+
+# Ejecutar con variable de entorno directa
+docker run -d \
+  --name job-search-bot \
+  -e DISCORD_BOT_TOKEN=tu_token_aqui \
+  job-search-bot:latest
+```
+
+### Comandos Docker Útiles
+
+```bash
+# Ver logs del contenedor
+docker logs -f job-search-bot
+
+# Detener el contenedor
+docker stop job-search-bot
+
+# Eliminar el contenedor
+docker rm job-search-bot
+
+# Ver contenedores en ejecución
+docker ps
+```
+
+### Publicar en Docker Hub
+
+```bash
+# Login en Docker Hub
+docker login
+
+# Etiquetar imagen
+docker tag job-search-bot:latest tu-usuario/job-search-bot:latest
+
+# Publicar imagen
+docker push tu-usuario/job-search-bot:latest
+```
+
+## Despliegue en Kubernetes
+
+El proyecto incluye manifiestos de Kubernetes en el directorio `k8s/` para despliegue en clusters.
+
+### Archivos de Configuración
+
+**deployment.yaml:**
+
+- Define el deployment del bot con 1 réplica
+- Especifica recursos: 256Mi-512Mi RAM, 250m-500m CPU
+- Configura restart policy y pull policy
+- Integra ConfigMap para variables de entorno
+
+**configmap.yaml:**
+
+- Almacena variables de configuración
+- Incluye el token de Discord (debe ser actualizado)
+
+### Configuración Previa
+
+1. **Actualizar ConfigMap:**
+
+Edita `k8s/configmap.yaml` con tu token de Discord:
+
+```yaml
+data:
+  DISCORD_BOT_TOKEN: tu_token_real_aqui
+```
+
+2. **Actualizar imagen en Deployment:**
+
+Edita `k8s/deployment.yaml` línea 19:
+
+```yaml
+image: tu-usuario/job-search-bot:latest
+```
+
+### Desplegar en Kubernetes
+
+```bash
+# Aplicar ConfigMap
+kubectl apply -f k8s/configmap.yaml
+
+# Aplicar Deployment
+kubectl apply -f k8s/deployment.yaml
+
+# Aplicar todos los manifiestos
+kubectl apply -f k8s/
+```
+
+### Comandos Kubernetes Útiles
+
+```bash
+# Ver estado del deployment
+kubectl get deployments
+
+# Ver pods en ejecución
+kubectl get pods
+
+# Ver logs del pod
+kubectl logs -f deployment/job-search-bot-deployment
+
+# Describir deployment
+kubectl describe deployment job-search-bot-deployment
+
+# Escalar réplicas (si necesario)
+kubectl scale deployment job-search-bot-deployment --replicas=2
+
+# Eliminar deployment
+kubectl delete -f k8s/deployment.yaml
+
+# Eliminar configmap
+kubectl delete -f k8s/configmap.yaml
+```
+
+### Actualizar Deployment
+
+```bash
+# Reconstruir y publicar nueva imagen
+docker build -t tu-usuario/job-search-bot:latest .
+docker push tu-usuario/job-search-bot:latest
+
+# Forzar actualización del deployment
+kubectl rollout restart deployment/job-search-bot-deployment
+
+# Ver estado del rollout
+kubectl rollout status deployment/job-search-bot-deployment
+```
+
+### Requisitos del Cluster
+
+- **Kubernetes**: Versión 1.19 o superior
+- **Recursos mínimos por nodo**: 512Mi RAM, 500m CPU disponibles
+- **Acceso a red**: Saliente para APIs de Discord y empleo
+- **Persistent Volume**: No requerido (base de datos SQLite en memoria del pod)
+
+### Consideraciones de Producción
+
+**Almacenamiento Persistente:**
+
+Para persistir la base de datos SQLite entre reinicios del pod, se recomienda:
+
+- Agregar un PersistentVolumeClaim
+- Montar volumen en `/app/programaciones_trabajos.db`
+- Configurar backup periódico de la base de datos
+
+**Secrets de Kubernetes:**
+
+Para mayor seguridad, usar Secrets en lugar de ConfigMap:
+
+```bash
+# Crear secret para el token
+kubectl create secret generic job-bot-secret \
+  --from-literal=DISCORD_BOT_TOKEN=tu_token_aqui
+
+# Referenciar en deployment.yaml
+envFrom:
+  - secretRef:
+      name: job-bot-secret
+```
+
+**Monitoreo y Logs:**
+
+- Configurar agregación de logs con Fluentd o similar
+- Implementar health checks y readiness probes
+- Considerar integración con Prometheus para métricas
+
 ## Estructura del Proyecto
 
 ```
-bot-empleos-discord/
+JobSearchBot/
 │
 ├── job_bot.py                    # Código principal del bot
 ├── config.py                     # Gestión de configuración
 ├── salary_utils.py               # Extracción de salarios
 ├── requirements.txt              # Dependencias de Python
+├── Dockerfile                    # Configuración de contenedor Docker
 ├── .env                         # Variables de entorno (no subir a GitHub)
 ├── .env.example                 # Plantilla de variables de entorno
+├── .gitignore                   # Archivos excluidos del control de versiones
 ├── programaciones_trabajos.db   # Base de datos SQLite (generada automáticamente)
+├── bot_empleos.log              # Archivo de logs (generado automáticamente)
+├── k8s/                         # Configuraciones de Kubernetes
+│   ├── deployment.yaml          # Definición de deployment
+│   └── configmap.yaml           # Variables de configuración
 └── README.md                    # Este archivo
 ```
 

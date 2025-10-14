@@ -1,0 +1,31 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: job-search-bot-deployment
+  labels:
+    app: job-search-bot
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: job-search-bot
+  template:
+    metadata:
+      labels:
+        app: job-search-bot
+    spec:
+      containers:
+        - name: job-search-bot
+          image: tu-usuario/job-search-bot:latest
+          imagePullPolicy: Always
+          envFrom:
+            - configMapRef:
+                name: job-bot-config
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+      restartPolicy: Always
