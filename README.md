@@ -114,14 +114,14 @@ python-dotenv>=1.0.0     # Carga de variables de entorno
 
 ### Archivos Requeridos
 
-| Archivo            | Descripción              | Obligatorio   |
-| ------------------ | ------------------------ | ------------- |
-| `job_bot.py`       | Bot principal            | ✅ Sí         |
-| `config.py`        | Sistema de configuración | ✅ Sí         |
-| `salary_utils.py`  | Extracción de salarios   | ✅ Sí         |
-| `requirements.txt` | Lista de dependencias    | ✅ Sí         |
-| `.env`             | Variables de entorno     | ✅ Sí (crear) |
-| `README.md`        | Documentación            | ❌ No         |
+| Archivo            | Descripción              | Obligatorio |
+| ------------------ | ------------------------ | ----------- |
+| `job_bot.py`       | Bot principal            | Sí          |
+| `config.py`        | Sistema de configuración | Sí          |
+| `salary_utils.py`  | Extracción de salarios   | Sí          |
+| `requirements.txt` | Lista de dependencias    | Sí          |
+| `.env`             | Variables de entorno     | Sí (crear)  |
+| `README.md`        | Documentación            | No          |
 
 **IMPORTANTE:** El bot NO funcionará sin `config.py` y `salary_utils.py`. Estos módulos son parte integral de la arquitectura v2.0.
 
@@ -166,14 +166,14 @@ tail -n 100 bot_empleos.log
 
 #### RemoteOK API
 
-- **Estado:** ✅ Activo
+- **Estado:** Activo
 - **Autenticación:** No requerida
 - **Límites:** Sin límites documentados
 - **Datos:** Trabajos remotos globales
 
 #### Adzuna API (Opcional)
 
-- **Estado:** ⚙️ Configurable
+- **Estado:** Configurable
 - **Autenticación:** App ID + API Key
 - **Límites:** 250 requests/mes (tier gratuito)
 - **Configuración:** Ver `config.py`
@@ -187,11 +187,11 @@ tail -n 100 bot_empleos.log
 
 ### Seguridad
 
-- ✅ Tokens en variables de entorno
-- ✅ Validación de configuración
-- ✅ Sanitización de entradas
-- ✅ Logging sin información sensible
-- ✅ .gitignore configurado
+- Tokens en variables de entorno
+- Validación de configuración
+- Sanitización de entradas
+- Logging sin información sensible
+- .gitignore configurado
 
 ## Solución de Problemas Detallada
 
