@@ -171,21 +171,22 @@ class JobScraper:
         try:
             async with session.get(url, headers=headers, timeout=20) as response:
                 if response.status == 200:
-                    return await response.text()
+                    return await response.text(), response.status
                 else:
                     logger.warning(f"URL {url} retornó status {response.status}")
-                    return None
+                    return None, response.status
         except Exception as e:
             logger.error(f"Error obteniendo {url}: {e}")
-            return None
+            return None, None
 
     @staticmethod
-    async def buscar_linkedin(keyword: str, country: str = "", limite: int = None) -> List[Dict]:
-        """Busca trabajos en LinkedIn"""
+    async def buscar_linkedin(keyword: str, country: str = "", limite: int = None) -> tuple[List[Dict], bool]:
+        """Busca trabajos en LinkedIn. Retorna (trabajos, bloqueado_por_rate_limit)"""
         if limite is None:
             limite = Config.MAX_TRABAJOS_POR_BUSQUEDA
         
         trabajos = []
+        rate_limited = False
         consulta = urllib.parse.quote(keyword)
         ubicacion = urllib.parse.quote(country) if country else ""
         
@@ -198,9 +199,15 @@ class JobScraper:
         }
         
         async with aiohttp.ClientSession() as session:
-            html = await JobScraper._fetch_url(session, url, headers)
+            html, status = await JobScraper._fetch_url(session, url, headers)
+            
+            if status == 429:
+                logger.warning(f"LinkedIn bloqueó la búsqueda con error 429 (rate limit)")
+                rate_limited = True
+                return trabajos, rate_limited
+            
             if not html:
-                return trabajos
+                return trabajos, rate_limited
 
             soup = BeautifulSoup(html, 'html.parser')
             job_cards = soup.find_all('div', class_='base-card', limit=limite * 2)
@@ -214,15 +221,22 @@ class JobScraper:
 
             parsed_results = await asyncio.gather(*tasks)
             
+            count_429 = 0
             for trabajo in parsed_results:
-                if trabajo:
+                if trabajo and trabajo.get('_rate_limited'):
+                    count_429 += 1
+                elif trabajo:
                     trabajos.append(trabajo)
                     if len(trabajos) >= limite:
                         break
             
+            if count_429 > len(parsed_results) * 0.5:
+                logger.warning(f"LinkedIn: {count_429}/{len(parsed_results)} páginas bloqueadas (429)")
+                rate_limited = True
+            
             logger.info(f"LinkedIn: {len(trabajos)} trabajos encontrados para '{keyword}'")
 
-        return trabajos
+        return trabajos, rate_limited
 
     @staticmethod
     async def _parsear_linkedin_card(session, card, job_url, headers) -> Optional[Dict]:
@@ -237,11 +251,13 @@ class JobScraper:
 
         titulo = title_elem.text.strip()
         
-        # Obtener la descripción completa de la página del trabajo
-        descripcion_html = await JobScraper._fetch_url(session, job_url, headers)
+        descripcion_html, status = await JobScraper._fetch_url(session, job_url, headers)
         descripcion_texto = ""
         nivel_experiencia = "No especificado"
         tipo_trabajo = "No especificado"
+        
+        if status == 429:
+            return {'_rate_limited': True}
 
         if descripcion_html:
             desc_soup = BeautifulSoup(descripcion_html, 'html.parser')
@@ -357,7 +373,16 @@ class JobScraper:
         if not isinstance(tags, list):
             tags = []
         
-        # Extraer salario - prioridad: campos dedicados > título > descripción > tags
+        descripcion_texto = ''
+        if description:
+            try:
+                soup = BeautifulSoup(description, 'html.parser')
+                descripcion_texto = soup.get_text(separator=' ', strip=True)
+                descripcion_texto = ' '.join(descripcion_texto.split())
+            except Exception as e:
+                logger.debug(f"Error parseando HTML de descripción: {e}")
+                descripcion_texto = description
+        
         salario_info = None
         
         if job.get('salary_min') and job.get('salary_max'):
@@ -373,14 +398,13 @@ class JobScraper:
         if not salario_info:
             salario_info = extractor_salario.extraer_salario(titulo)
         
-        if not salario_info and description:
-            salario_info = extractor_salario.extraer_salario(description)
+        if not salario_info and descripcion_texto:
+            salario_info = extractor_salario.extraer_salario(descripcion_texto)
         
         if not salario_info and tags:
             texto_tags = ' '.join(str(tag) for tag in tags)
             salario_info = extractor_salario.extraer_salario(texto_tags)
         
-        # Determinar tipo de trabajo
         tipo_trabajo = 'Full-time'
         if tags:
             tags_lower = [str(t).lower() for t in tags]
@@ -393,10 +417,9 @@ class JobScraper:
             elif 'internship' in tags_lower or 'intern' in tags_lower:
                 tipo_trabajo = 'Pasantía'
         
-        # Extraer nivel de experiencia
         nivel_experiencia = extractor_experiencia.extraer_nivel(
             titulo=titulo,
-            descripcion=description[:1000],
+            descripcion=descripcion_texto[:1000] if descripcion_texto else '',
             tags=tags
         )
         
@@ -406,7 +429,7 @@ class JobScraper:
             'ubicacion': job.get('location', 'Remoto'),
             'url': job.get('url', 'N/A'),
             'fecha': job.get('date', 'Reciente'),
-            'descripcion': description[:500] if description else 'No disponible',
+            'descripcion': descripcion_texto[:500] if descripcion_texto else 'No disponible',
             'tipo_trabajo': tipo_trabajo,
             'nivel_experiencia': nivel_experiencia,
             'salario': salario_info,
@@ -419,14 +442,21 @@ class JobScraper:
         """Busca trabajos en todas las fuentes"""
         logger.info(f"Iniciando búsqueda: '{keyword}' en '{country or 'global'}'")
         
-        trabajos = await JobScraper.buscar_linkedin(keyword, country)
+        trabajos, linkedin_bloqueado = await JobScraper.buscar_linkedin(keyword, country)
         
-        if len(trabajos) < Config.MAX_TRABAJOS_POR_BUSQUEDA:
+        if linkedin_bloqueado and trabajos:
+            logger.info(f"LinkedIn parcialmente bloqueado (429), obtenidos {len(trabajos)} trabajos. Complementando con RemoteOK")
+            trabajos_remoteok = await JobScraper.buscar_remoteok(keyword, country)
+            trabajos.extend(trabajos_remoteok)
+        elif linkedin_bloqueado and not trabajos:
+            logger.info("LinkedIn completamente bloqueado (429), usando solo RemoteOK para resultados")
+            trabajos = await JobScraper.buscar_remoteok(keyword, country)
+        elif len(trabajos) < Config.MAX_TRABAJOS_POR_BUSQUEDA:
             trabajos_remoteok = await JobScraper.buscar_remoteok(keyword, country)
             trabajos.extend(trabajos_remoteok)
         
         if not trabajos and country:
-            logger.info(f"Sin resultados con país, intentando búsqueda global")
+            logger.info(f"Sin resultados con país, intentando búsqueda global en RemoteOK")
             trabajos = await JobScraper.buscar_remoteok(keyword, "")
         
         trabajos = ordenar_por_salario(trabajos, descendente=True)

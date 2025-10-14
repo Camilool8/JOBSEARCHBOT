@@ -8,7 +8,7 @@ WORKDIR /app
 
 COPY requirements.txt .
 RUN --mount=type=cache,target=/root/.cache/pip \
-    pip install --no-cache-dir --platform manylinux_2_17_x86_64 --only-binary=:all: -r requirements.txt
+    pip install --no-cache-dir -r requirements.txt
 
 FROM --platform=linux/amd64 python:3.10-slim-bookworm
 
