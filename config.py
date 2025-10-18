@@ -45,7 +45,7 @@ class Config:
     INTERVALO_ACTUALIZACION_PROGRAMADA: int = 24    # Ejecutar búsquedas programadas cada 24h
     
     # Timeouts (en segundos)
-    TIMEOUT_VISTA_PAGINACION: int = 300  # 5 minutos
+    TIMEOUT_VISTA_PAGINACION: int = 86400  # 24 horas
     TIMEOUT_REQUEST_HTTP: int = 20       # 20 segundos
     
     # ==================== BASE DE DATOS ====================

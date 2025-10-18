@@ -469,7 +469,7 @@ class JobScraper:
 class PaginadorTrabajos(View):
     """Vista de paginación interactiva"""
     
-    def __init__(self, trabajos: List[Dict], keyword: str, country: str, timeout=300):
+    def __init__(self, trabajos: List[Dict], keyword: str, country: str, timeout: int = Config.TIMEOUT_VISTA_PAGINACION):
         super().__init__(timeout=timeout)
         self.trabajos = trabajos
         self.keyword = keyword
@@ -602,7 +602,7 @@ async def buscar_trabajos_cmd(interaction: discord.Interaction, keyword: str, pa
             await interaction.followup.send(embed=embed)
             return
         
-        vista = PaginadorTrabajos(trabajos, keyword, pais)
+        vista = PaginadorTrabajos(trabajos, keyword, pais, timeout=Config.TIMEOUT_VISTA_PAGINACION)
         await interaction.followup.send(embed=vista.crear_embed(), view=vista)
         logger.info(f"Búsqueda exitosa: {len(trabajos)} trabajos enviados")
         
@@ -798,7 +798,7 @@ async def verificar_trabajos_programados():
                         trabajos = await JobScraper.buscar_trabajos(keyword, country)
                         
                         if trabajos:
-                            vista = PaginadorTrabajos(trabajos, keyword, country)
+                            vista = PaginadorTrabajos(trabajos, keyword, country, timeout=Config.TIMEOUT_VISTA_PAGINACION)
                             embed = vista.crear_embed()
                             embed.title = f"Actualización Diaria | {embed.title}"
                             await channel.send(embed=embed, view=vista)
@@ -821,7 +821,10 @@ async def on_ready():
     """Evento cuando el bot está listo"""
     try:
         await tree.sync()
-        verificar_trabajos_programados.start()
+        if not verificar_trabajos_programados.is_running():
+            verificar_trabajos_programados.start()
+        else:
+            logger.info("Programación de trabajos ya iniciada")
         
         Config.mostrar_configuracion()
         logger.info("="*60)
